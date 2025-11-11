@@ -1,151 +1,170 @@
-import machine
+import machine 
 from machine import Pin, PWM
 import time
 import math
-import neopixel
-
 
 class MotorDriver:
-    def __init__(self, pinA, pinB, freq=8000):
-        self.MA = PWM(Pin(pinA))
-        self.MB = PWM(Pin(pinB))
-        self.MA.freq(freq)
-        self.MB.freq(freq)
+    """Represents one side of the robot (two PWM pins controlling direction)."""
+    def __init__(self, pin_forward: int, pin_backward: int, freq: int = 8000):
+        self.forward = PWM(Pin(pin_forward))
+        self.backward = PWM(Pin(pin_backward))
+        self.forward.freq(freq)
+        self.backward.freq(freq)
 
-    def set_pwm(self, PWM_val, direction):
-        if direction >= 0:
-            self.MA.duty_u16(int(PWM_val))
-            self.MB.duty_u16(0)
+    def set_speed(self, duty: int):
+        """Set motor speed with signed duty cycle (0–65535 range)."""
+        duty = max(min(abs(int(duty)), 65535), 0)
+        if duty == 0:
+            self.forward.duty_u16(0)
+            self.backward.duty_u16(0)
+        elif duty > 0:
+            self.forward.duty_u16(duty)
+            self.backward.duty_u16(0)
         else:
-            self.MA.duty_u16(0)
-            self.MB.duty_u16(int(PWM_val))
+            self.forward.duty_u16(0)
+            self.backward.duty_u16(duty)
 
     def stop(self):
-        self.MA.duty_u16(0)
-        self.MB.duty_u16(0)
+        #Stop motor completely
+        self.forward.duty_u16(0)
+        self.backward.duty_u16(0)
 
-class Ultrasound():
-    def __init__(self, trigger, echo, timeout = 1e6):
-        self.t = trigger
-        self.e = echo
-        self.timeout = timeout
-    def measure(self):
-        self.t.low()
-        time.sleep_us(2)
-        self.t.high()
-        time.sleep_us(15)
-        self.t.low()
-        start_time = time.ticks_us()
-        while self.e.value() == 0:
-            signaloff = time.ticks_us()
-            if time.ticks_diff(signaloff,start_time) >= self.timeout:
-                raise TimeoutError
-            
-        start_time = time.ticks_us()
-        while self.e.value() == 1:
-            signalon = time.ticks_us()
-            if time.ticks_diff(signalon,start_time) >= self.timeout:
-                raise TimeoutError
-        timepassed = signalon - signaloff
 
-        return ((timepassed/1000) * 16.7) + 1.19
-
-class Drive:
-    def __init__(self, left_pins, right_pins, L=13, bias=-0.07):
-        self.L = L
-        self.bias = bias
-
-        self.left_bias = 1.0 - bias / 2
-        self.right_bias = 1.0 + bias / 2
-
-        self.left_motor = MotorDriver(*left_pins)
-        self.right_motor = MotorDriver(*right_pins)
+class Motor:
+    def __init__(self,freq = 8_000):
+        self.M1A = machine.PWM(machine.Pin(8))
+        self.M1B = machine.PWM(machine.Pin(9))
+        self.M2A = machine.PWM(machine.Pin(10))
+        self.M2B = machine.PWM(machine.Pin(11))
+        self.M1A.freq(freq)
+        self.M1B.freq(freq)
+        self.M2A.freq(freq)
+        self.M2B.freq(freq)
 
     def drive(self, speed, omega):
-        L = self.L
+        L = 13
 
-        v_L = (speed) - ((-omega * L) / 2)
-        v_R = (speed) + ((-omega * L) / 2)
+        v_L = (speed) - ((-omega * L)/2)
+        v_R = (speed) + ((-omega * L)/2)
+        PWM_L = abs(1000*v_L) + 6152
+        PWM_R = abs(1000*v_R) + 6152
+        if v_L >= 0:
+            self.M1A.duty_u16(int(PWM_L)) 
+            self.M1B.duty_u16(0)
+        else:
+            self.M1A.duty_u16(0) 
+            self.M1B.duty_u16(int(PWM_L)) 
+        if v_R > 0:
+            self.M2A.duty_u16(int(PWM_R))
+            self.M2B.duty_u16(0)
+        else:
+            self.M2A.duty_u16(0)
+            self.M2B.duty_u16(int(PWM_R))
 
-        PWM_L = abs(1080 * v_L) + 6152
-        PWM_R = abs(1080 * v_R) + 6152
+    def drive_curl(self,speed,omega):
+        L = 13
 
-        PWM_L *= self.left_bias
-        PWM_R *= self.right_bias
+        bias = -.10
+        # split bias to left/right motors 
+        left_bias = 1.0 - bias/2 
+        right_bias = 1.0 + bias/2
 
-        self.left_motor.set_pwm(PWM_L, v_L)
-        self.right_motor.set_pwm(PWM_R, v_R)
+        v_L = (speed) - ((-omega * L)/2)
+        v_R = (speed) + ((-omega * L)/2)
+        PWM_L = abs(1000*v_L) + 6152
+        PWM_R = abs(1000*v_R) + 6152
+        PWM_L = int(PWM_L * left_bias)
+        PWM_R = int(PWM_L * right_bias)
+        if v_L >= 0:
+            self.M1A.duty_u16(int(PWM_L)) 
+            self.M1B.duty_u16(0)
+        else:
+            self.M1A.duty_u16(0) 
+            self.M1B.duty_u16(int(PWM_L)) 
+        if v_R > 0:
+            self.M2A.duty_u16(int(PWM_R))
+            self.M2B.duty_u16(0)
+        else:
+            self.M2A.duty_u16(0)
+            self.M2B.duty_u16(int(PWM_R))
+
 
     def stop(self):
-        self.left_motor.stop()
-        self.right_motor.stop()
+        self.M1A.duty_u16(0)
+        self.M1B.duty_u16(0)
+        self.M2A.duty_u16(0)
+        self.M2B.duty_u16(0)
+    
 
 
-class Feedback:
-    def __init__(self, pixel_pin=18, buzzer_pin=22, num_pixels=2):
-        self.np = neopixel.NeoPixel(Pin(pixel_pin), num_pixels)
-        self.buzzer = PWM(Pin(buzzer_pin))
-        self.buzzer.duty_u16(0)
 
-    def set_feedback(self, distance):
-        if distance < 5:
-            color = (255, 0, 0)   # Red
-            freq = 1500
-            duty = 20000
-        elif distance < 15:
-            color = (255, 150, 0) # Orange
-            freq = 1000
-            duty = 12000
-        elif distance < 30:
-            color = (0, 255, 0)   # Green
-            freq = 700
-            duty = 6000
-        else:
-            color = (0, 0, 255)   # Blue
-            freq = 0
-            duty = 0
 
-        for i in range(len(self.np)):
-            self.np[i] = color
-        self.np.write()
+# 0 = even, >0 = bias right, <0 = bias left
+bias = -.07
 
-        if freq > 0:
-            self.buzzer.freq(freq)
-            self.buzzer.duty_u16(duty)
-        else:
-            self.buzzer.duty_u16(0)
+# split bias to left/right motors 
+left_bias = 1.0 - bias/2 
+right_bias = 1.0 + bias/2
 
-    def clear(self):
-        for i in range(len(self.np)):
-            self.np[i] = (0, 0, 0)
-        self.np.write()
-        self.buzzer.duty_u16(0)
+#Sets speed and adjusts for bias
+speed = 30
+speed_duty = 1000*speed + 6152
+speed_bias_left = int(speed_duty * left_bias)
+speed_bias_right = int(speed_duty * right_bias)
+
+'''
+M1A.duty_u16(speed_bias_left) 
+M1B.duty_u16(0) 
+M2A.duty_u16(speed_bias_right)
+M2B.duty_u16(0) 
+
+time.sleep(5) # stop M1A.duty_u16(0)
+M1A.duty_u16(0)
+M2A.duty_u16(0)
+'''
+
 
 if __name__ == "__main__":
-    robot = Drive(left_pins=(8, 9), right_pins=(10, 11))
-    sensor = Ultrasound(trigger=Pin(28, Pin.OUT), echo=Pin(7, Pin.IN))
-    feedback = Feedback(pixel_pin=18, buzzer_pin=22, num_pixels=2)
+    # TEST 1 -- straight!
+    # 20 cm/s, 0 rad/s 
+    m = Motor()
+    m.drive (20, 0)
+    time.sleep_ms(500)
+    # stop, robot should have gone 10 cm forward. Check! I got about 12 cm.
+    m.drive (0, 0)
+    time.sleep_ms(500)
 
-    def run_test(name, speed, omega, duration_ms):
-        start = time.ticks_ms()
-        robot.drive(speed, omega)
 
-        try:
-            while time.ticks_diff(time.ticks_ms(), start) < duration_ms:
-                try:
-                    dist = sensor.measure()
-                    feedback.set_feedback(dist)
-                except TimeoutError:
-                    pass
-                time.sleep(0.01)
-        finally:
-            robot.stop()
-            feedback.clear()
-            time.sleep_ms(500)
+    # TEST 2 -- reverse
+    # -20 cm/s, 0 rad/s 
+    m.drive (-20, 0)
+    time.sleep_ms(500)
+    # stop, robot should have gone 10 cm in reverse. Drive the M1B and M2B pins!
+    m.drive (0, 0)
+    time.sleep_ms(500)
 
-    # --- Movement tests ---
-    run_test("STRAIGHT", 20, 0, 500)
-    run_test("REVERSE", -20, 0, 500)
-    run_test("RIGHT TURN", 20, math.radians(180), 500)
-    run_test("LEFT TURN", 20, -math.radians(180), 500)
-    run_test("ROTATE 360", 0, math.radians(360), 1000)
+
+
+    # TEST 3 -- RIGHT
+    m.drive (20, math.radians(180))
+    time.sleep_ms(500)
+    # stop, robot should have turned about 90 degrees clockwise
+    m.drive (0, 0)
+    time.sleep_ms(500)
+
+
+    # TEST 4 -- LEFT
+    m.drive (20, -math.radians(180))
+    time.sleep_ms(500)
+    # stop, we should have turned about 180 degrees counter clockwise
+    m.drive (0, 0)
+    time.sleep_ms(500)
+
+
+
+    # TEST 5 -- ROTATE in PLACE
+    m.drive (0, math.radians(360))
+    time.sleep_ms(1000)
+    # stop, robot should turn about 360 degrees clockwise
+    m.drive (0, 0)
+    time.sleep_ms(500)
