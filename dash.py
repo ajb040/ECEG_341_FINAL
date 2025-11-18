@@ -24,56 +24,39 @@ Kd = 0.01 # Derivative gain (start with a small value!)
 ultrasound = Ultrasound(trigger = Pin(28, Pin.OUT), echo = Pin(7, Pin.IN))
 
 try:
-    while True: # run for 500 iterations then stop!
+    while True:
         try:
             distance = ultrasound.measure()
         except TimeoutError:
-            distance = 999
-        # Calculate dt (time delta)
-        if distance > 20:
-            current_time_us = time.ticks_us()
-            dt_us = time.ticks_diff(current_time_us, last_time_us)
-            dt_s = dt_us / 1000000.0 # convert to seconds
-            last_time_us = current_time_us
-
-
-            # Get the latest sensor reading
-            lr.update()
-
-            # --- IMPLEMENT YOUR CONTROL LOGIC HERE ---
-            #
-            # 1. Calculate the 'error' (which is just lr.offset)
-            error = lr.offset
-            # 2. Calculate the 'angular_velocity' based on the error
-            #
-            # --- P-Only Control Logic ---
-            error = lr.offset
-
-            derivative = 0
-            if dt_s > 0:
-                derivative = (error - last_offset) / dt_s
-
-            
-            angular_velocity = (Kp * error) + (Kd * derivative)
-
-            last_offset = error
-            # --- END CONTROL LOGIC ---
-            #
-            # --- END CONTROL LOGIC ---
-            
-
-            # Send the command to the motors
-            # Note: We use -angular_velocity if your motor
-            # class defines a positive angle as a left turn.
-            # This depends on your motor.drive() implementation.
-            # Let's start by assuming a positive value turns right.
-            m.drive(velocity,angular_velocity)
-                
-            # A small delay is not needed if your loop
-            # is fast, but 1ms can be okay. (try differnt values!)
-            time.sleep_ms(1)
+            distance = 0      # treat as object detected
+        
+        # STOP CONDITION
+        if distance <= 20:
+            m.stop()
+            time.sleep_ms(50)
+            continue
+    
+        # FOLLOW LINE (safe distance)
+        current_time_us = time.ticks_us()
+        dt_us = time.ticks_diff(current_time_us, last_time_us)
+        dt_s = dt_us / 1_000_000
+        last_time_us = current_time_us
+    
+        lr.update()
+        error = lr.offset
+    
+        derivative = 0
+        if dt_s > 0:
+            derivative = (error - last_offset) / dt_s
+    
+        angular_velocity = Kp * error + Kd * derivative
+        last_offset = error
+    
+        m.drive(velocity, angular_velocity)
+        time.sleep_ms(1)
         else:
             m.stop()
 
 finally:
+
     m.stop() # Always stop the motors
