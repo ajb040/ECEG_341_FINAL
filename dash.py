@@ -31,7 +31,7 @@ try:
             distance = 0      # treat as object detected
         
         # STOP CONDITION
-        if distance <= 20:
+        if distance <= 10:
             m.stop()
             time.sleep_ms(50)
             continue
@@ -60,5 +60,6 @@ try:
 finally:
 
     m.stop() # Always stop the motors
+
 
 
