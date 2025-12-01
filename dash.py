@@ -12,7 +12,7 @@ lr = LineReader([Pin(5),Pin(4),Pin(3),Pin(2),Pin(1),Pin(0)], [-20,-12,-4, 4, 12,
 m = Motor() # you might have different constructor values
 
 # Set a base speed. 30 is a good start.
-velocity = 30 
+velocity = 100
 
 # 2. --- Control Loop ---
 last_offset = 0.0
@@ -60,3 +60,4 @@ try:
 finally:
 
     m.stop() # Always stop the motors
+
