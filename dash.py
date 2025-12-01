@@ -49,15 +49,16 @@ try:
         if dt_s > 0:
             derivative = (error - last_offset) / dt_s
     
-        angular_velocity = Kp * error + Kd * derivative
-        last_offset = error
+            angular_velocity = Kp * error + Kd * derivative
+            last_offset = error
     
-        m.drive(velocity, angular_velocity)
-        time.sleep_ms(1)
+            m.drive(velocity, angular_velocity)
+            time.sleep_ms(1)
         else:
             m.stop()
 
 finally:
 
     m.stop() # Always stop the motors
+
 
